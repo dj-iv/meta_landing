@@ -925,45 +925,9 @@
     (function () {
       'use strict';
 
-      /* ══════════════════════════════════════════════════════════════════
-         MONDAY.COM INTEGRATION — How to connect in 5 minutes (free)
-         ══════════════════════════════════════════════════════════════════
-
-         We use a Make.com (or Zapier) webhook as a secure relay so that
-         your Monday.com API token is NEVER exposed in this HTML file.
-
-         ── OPTION A: Make.com (recommended — generous free tier) ──────────
-          1. Sign up at https://make.com
-          2. Create a new Scenario
-          3. Add a "Webhooks" module → "Custom webhook" → click Add
-             Copy the webhook URL Make.com provides
-          4. Add a second module: "Monday.com" → "Create an Item"
-             - Connect your Monday.com account
-             - Board: select your Leads board
-             - Item Name: map to  {{1.email}}
-             - Email column: map to  {{1.email}}
-             - Text/Notes column: map to  {{1.message}}
-             - Any other columns: map to  {{1.source}}  or  {{1.submittedAt}}
-          5. Activate the Scenario
-          6. Paste the webhook URL into WEBHOOK_URL below
-
-         ── OPTION B: Zapier ────────────────────────────────────────────────
-          1. New Zap → Trigger: "Webhooks by Zapier" → "Catch Hook"
-             Copy the webhook URL
-          2. Action: "Monday.com" → "Create an Item"
-             Map  Item Name = email,  Notes = message
-          3. Turn the Zap on
-          4. Paste the webhook URL into WEBHOOK_URL below
-
-         ── NEVER put your Monday.com API token directly in this file ───────
-            It would be visible in the page source to anyone who views it.
-
-         ══════════════════════════════════════════════════════════════════ */
-
-      var WEBHOOK_URL     = 'https://hook.eu1.make.com/6drunymwu9eyrkema4en7kdwr43bll1p';
-      var WEBHOOK_API_KEY = 'uctel-meta-2026-xK9p';
-
-      /* ─────────────────────────────────────────────────────────────── */
+      /* Submissions go to the Vercel serverless proxy at /api/submit.
+         Credentials (webhook URL + API key) live in Vercel env vars —
+         they are never exposed in this HTML file. */
 
       var form        = document.getElementById('survey-form');
       var submitBtn   = document.getElementById('submit-btn');
@@ -1036,38 +1000,18 @@
 
         if (!valid) return;
 
-        var payload = {
-          email:       emailField.value.trim(),
-          message:     messageField.value.trim(),
-          source:      'UCtel Meta Landing Page',
-          submittedAt: new Date().toISOString()
-        };
-
-        /* Fallback: if webhook hasn't been configured yet, show success
-           so the page can still be tested end-to-end during development */
-        if (!WEBHOOK_URL || WEBHOOK_URL === 'YOUR_MAKE_OR_ZAPIER_WEBHOOK_URL') {
-          console.warn('[UCtel] Webhook URL not configured. Showing success state for preview only.');
-          setSubmitting(true);
-          form.style.display = 'none';
-          successMsg.classList.add('visible');
-          successMsg.focus();
-          return;
-        }
-
         setSubmitting(true);
 
-        var reqHeaders = { 'Content-Type': 'application/json' };
-        if (WEBHOOK_API_KEY) reqHeaders['x-make-apikey'] = WEBHOOK_API_KEY;
-
-        fetch(WEBHOOK_URL, {
+        fetch('/api/submit', {
           method:  'POST',
-          headers: reqHeaders,
-          body:    JSON.stringify(payload)
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            email:   emailField.value.trim(),
+            message: messageField.value.trim()
+          })
         })
           .then(function (res) {
-            /* Make.com returns 200; Zapier returns 200 with body "Accepted" */
             if (!res.ok) throw new Error('HTTP ' + res.status);
-            /* Show success state */
             form.style.display = 'none';
             successMsg.classList.add('visible');
             successMsg.focus();
