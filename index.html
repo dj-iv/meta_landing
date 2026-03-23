@@ -1023,11 +1023,8 @@
         })
           .then(function (res) {
             if (!res.ok) throw new Error('HTTP ' + res.status);
-            /* Fire Meta Pixel Lead conversion event */
-            if (typeof fbq === 'function') fbq('track', 'Lead');
-            form.style.display = 'none';
-            successMsg.classList.add('visible');
-            successMsg.focus();
+            /* Redirect to thank-you page — Lead pixel fires there on load */
+            window.location.href = '/thank-you';
           })
           .catch(function (err) {
             console.error('[UCtel] Submission error:', err);
