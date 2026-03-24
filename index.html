@@ -1024,7 +1024,8 @@
           .then(function (res) {
             if (!res.ok) throw new Error('HTTP ' + res.status);
             /* Redirect to thank-you page — Lead pixel fires there on load */
-            window.location.href = '/thank-you';
+            var isLocalHost = ['localhost', '127.0.0.1'].indexOf(window.location.hostname) !== -1;
+            window.location.href = isLocalHost ? '/thank-you.html' : '/thank-you';
           })
           .catch(function (err) {
             console.error('[UCtel] Submission error:', err);

@@ -1,13 +1,13 @@
 /**
  * Vercel Serverless Function — /api/submit
  *
- * Acts as a secure proxy between the landing page and Make.com.
- * - Keeps the webhook URL and API key off the client (not visible in page source)
- * - Eliminates CORS issues (server-to-server call)
+ * Creates a lead directly in Monday.com.
+ * - Keeps the Monday API token off the client
+ * - Eliminates CORS issues with a server-to-server call
  *
  * Environment variables to set in Vercel dashboard:
- *   MAKE_WEBHOOK_URL   — your Make.com webhook URL
- *   MAKE_WEBHOOK_KEY   — the API key you set in the Make.com webhook (optional)
+ *   MONDAY_API_TOKEN   — your Monday API token
+ *   MONDAY_BOARD_ID    — target board ID for new leads
  */
 
 export default async function handler(req, res) {
@@ -16,11 +16,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const webhookUrl = process.env.MAKE_WEBHOOK_URL;
-  const webhookKey = process.env.MAKE_WEBHOOK_KEY;
+  const mondayApiToken = process.env.MONDAY_API_TOKEN;
+  const mondayBoardId = process.env.MONDAY_BOARD_ID;
 
-  if (!webhookUrl) {
-    console.error('[submit] MAKE_WEBHOOK_URL env var is not set');
+  if (!mondayApiToken || !mondayBoardId) {
+    console.error('[submit] Monday env vars are not set');
     return res.status(500).json({ error: 'Server misconfiguration' });
   }
 
@@ -38,26 +38,55 @@ export default async function handler(req, res) {
     message:     message.trim(),
     source:      'UCtel Meta Landing Page',
     submittedAt: new Date().toISOString(),
+    pageUrl:     'https://offices.uctel.co.uk/',
   };
 
-  const headers = { 'Content-Type': 'application/json' };
-  if (webhookKey) headers['x-make-apikey'] = webhookKey;
+  const itemName = `Meta Lead - ${payload.email}`;
+  const columnValues = JSON.stringify({
+    email: {
+      email: payload.email,
+      text: payload.email,
+    },
+    long_text: {
+      text: payload.message,
+    },
+    text20: payload.source,
+    text1: payload.pageUrl,
+  });
+
+  const mondayBody = {
+    query: `mutation CreateLead($boardId: ID!, $itemName: String!, $columnValues: JSON!) {
+      create_item(board_id: $boardId, item_name: $itemName, column_values: $columnValues) {
+        id
+      }
+    }`,
+    variables: {
+      boardId: mondayBoardId,
+      itemName,
+      columnValues,
+    },
+  };
 
   try {
-    const upstream = await fetch(webhookUrl, {
-      method:  'POST',
-      headers,
-      body:    JSON.stringify(payload),
+    const upstream = await fetch('https://api.monday.com/v2', {
+      method: 'POST',
+      headers: {
+        Authorization: mondayApiToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(mondayBody),
     });
 
-    if (!upstream.ok) {
-      console.error(`[submit] Make.com responded with ${upstream.status}`);
-      return res.status(502).json({ error: `Upstream error: ${upstream.status}` });
+    const result = await upstream.json();
+
+    if (!upstream.ok || result.errors?.length) {
+      console.error('[submit] Monday.com error:', result.errors || result);
+      return res.status(502).json({ error: 'Upstream error' });
     }
 
     return res.status(200).json({ ok: true });
   } catch (err) {
-    console.error('[submit] Fetch to Make.com failed:', err);
+    console.error('[submit] Fetch to Monday.com failed:', err);
     return res.status(500).json({ error: 'Submission failed' });
   }
 }
